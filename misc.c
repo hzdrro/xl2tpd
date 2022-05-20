@@ -51,6 +51,17 @@ void init_log()
     }
 }
 
+char ipaddy_buf[1024];
+socklen_t ipaddr_len = sizeof(ipaddy_buf);
+
+int sockaddr_cmp(struct in6_addr a1, struct in6_addr a2) {
+    int i;
+    for (i = 0; i < 16; i++)
+        if (a1.s6_addr[i] != a2.s6_addr[i])
+            return a1.s6_addr[i] - a2.s6_addr[i];
+    return 0;
+}
+
 void l2tp_log (int level, const char *fmt, ...)
 {
     char buf[2048];

@@ -31,7 +31,7 @@
 #include "misc.h"    /* for IPADDY macro */
 
 char hostname[256];
-struct sockaddr_in server, from;        /* Server and transmitter structs */
+struct sockaddr_in6 server, from;        /* Server and transmitter structs */
 int server_socket;              /* Server socket */
 #ifdef USE_KERNEL
 int kernel_support;             /* Kernel Support there or not? */
@@ -42,11 +42,12 @@ int init_network (void)
     long arg;
     unsigned int length = sizeof (server);
     gethostname (hostname, sizeof (hostname));
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = gconfig.listenaddr;
-    server.sin_port = htons (gconfig.port);
+    server.sin6_family = AF_INET6;
+    //server.sin6_addr.s_addr = gconfig.listenaddr; 
+    server.sin6_addr = in6addr_any;
+    server.sin6_port = htons (gconfig.port);
     int flags;
-    if ((server_socket = socket (PF_INET, SOCK_DGRAM, 0)) < 0)
+    if ((server_socket = socket (PF_INET6, SOCK_DGRAM, 0)) < 0)
     {
         l2tp_log (LOG_CRIT, "%s: Unable to allocate socket. Terminating.\n",
              __FUNCTION__);
@@ -129,7 +130,7 @@ int init_network (void)
     arg = fcntl (server_socket, F_GETFL);
     arg |= O_NONBLOCK;
     fcntl (server_socket, F_SETFL, arg);
-    gconfig.port = ntohs (server.sin_port);
+    gconfig.port = ntohs (server.sin6_port);
     return 0;
 }
 
@@ -374,7 +375,7 @@ void udp_xmit (struct buffer *buf, struct tunnel *t)
     /* Receive one packet. */
     if ((err = sendmsg(server_socket, &msgh, 0)) < 0) {
 	l2tp_log(LOG_ERR, "udp_xmit failed to %s:%d with err=%d:%s\n",
-		 IPADDY(t->peer.sin_addr), ntohs(t->peer.sin_port),
+		 IPADDY(t->peer.sin6_addr), ntohs(t->peer.sin6_port),
 		 err,strerror(errno));
     }
 }
@@ -450,7 +451,7 @@ void network_thread ()
      * We loop forever waiting on either data from the ppp drivers or from
      * our network socket.  Control handling is no longer done here.
      */
-    struct sockaddr_in from;
+    struct sockaddr_in6 from;
     struct in_pktinfo to;
     unsigned int fromlen;
     int tunnel, call;           /* Tunnel and call */
@@ -617,7 +618,7 @@ void network_thread ()
 	    {
 		l2tp_log(LOG_DEBUG, "%s: recv packet from %s, size = %d, "
 			 "tunnel = %d, call = %d ref=%u refhim=%u\n",
-			 __FUNCTION__, inet_ntoa (from.sin_addr),
+			 __FUNCTION__, IPADDY (from.sin6_addr),
 			 recvsize, tunnel, call, refme, refhim);
 	    }
 
@@ -626,10 +627,10 @@ void network_thread ()
 		do_packet_dump (buf);
 	    }
 
-        if (!(c = get_call (tunnel, call, from.sin_addr,
-                from.sin_port, refme, refhim)))
+        if (!(c = get_call (tunnel, call, from.sin6_addr,
+                from.sin6_port, refme, refhim)))
         {
-            if ((c = get_tunnel (tunnel, from.sin_addr.s_addr, from.sin_port)))
+            if ((c = get_tunnel (tunnel, from.sin6_addr, from.sin6_port)))
             {
                 /*
                 * It is theoretically possible that we could be sent
@@ -741,15 +742,15 @@ int connect_pppol2tp(struct tunnel *t) {
 
     int ufd = -1, fd2 = -1;
     int flags;
-    struct sockaddr_pppol2tp sax;
+    struct sockaddr_pppol2tpin6 sax;
 
-    struct sockaddr_in server;
+    struct sockaddr_in6 server;
 
-    memset(&server, 0, sizeof(struct sockaddr_in));
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = gconfig.listenaddr;
-    server.sin_port = htons (gconfig.port);
-    if ((ufd = socket (PF_INET, SOCK_DGRAM, 0)) < 0)
+    memset(&server, 0, sizeof(struct sockaddr_in6));
+    server.sin6_family = AF_INET6;
+    server.sin6_addr = in6addr_any;
+    server.sin6_port = htons (gconfig.port);
+    if ((ufd = socket (PF_INET6, SOCK_DGRAM, 0)) < 0)
     {
         l2tp_log (LOG_CRIT, "%s: Unable to allocate UDP socket. Terminating.\n",
             __FUNCTION__);
@@ -802,9 +803,9 @@ int connect_pppol2tp(struct tunnel *t) {
     sax.sa_family = AF_PPPOX;
     sax.sa_protocol = PX_PROTO_OL2TP;
     sax.pppol2tp.fd = t->udp_fd;
-    sax.pppol2tp.addr.sin_addr.s_addr = t->peer.sin_addr.s_addr;
-    sax.pppol2tp.addr.sin_port = t->peer.sin_port;
-    sax.pppol2tp.addr.sin_family = AF_INET;
+    sax.pppol2tp.addr.sin6_addr = t->peer.sin6_addr;
+    sax.pppol2tp.addr.sin6_port = t->peer.sin6_port;
+    sax.pppol2tp.addr.sin6_family = AF_INET6;
     sax.pppol2tp.s_tunnel  = t->ourtid;
     sax.pppol2tp.d_tunnel  = t->tid;
     if ((connect(fd2, (struct sockaddr *)&sax, sizeof(sax))) < 0) {
